@@ -311,10 +311,36 @@ def start_rgw(ctx, config, on_client = None, except_client = None):
 
         elif ctx.rgw.frontend == 'civetweb':
             host, port = ctx.rgw.role_endpoints[client]
-            rgw_cmd.extend([
-                '--rgw-frontends',
-                'civetweb port={port}'.format(port=port),
-            ])
+            if ctx.rgw.ssl_enabled == True:
+                remote.run(
+                    args=['openssl', 'genrsa', '-out', 'ca.key', '2048'])
+                remote.run(
+                    args=['openssl', 'req', '-new', '-key', 'ca.key', '-out', 'ca.csr', '-subj',
+                          '/C=US/ST=California/L=City/O=Company/OU=Linux/CN=www.company.com'])
+                remote.run(
+                    args=['openssl', 'x509', '-req', '-days', '365', '-in', 'ca.csr', '-signkey', 'ca.key', '-out', 'ca.crt'])
+                remote.run(
+                    args=['cp', '-f', 'ca.crt', '/etc/pki/tls/certs'])
+                remote.run(
+                    args=['cp', '-f', 'ca.key', '/etc/pki/tls/private/ca.key'])
+                remote.run(
+                    args=['cp', '-f', 'ca.csr', '/etc/pki/tls/private/ca.csr'])
+                remote.run(
+                    args=['cp', 'ca.crt', 'ca.pem'])
+                remote.run(
+                    args=['cat', 'ca.key', '>>', 'ca.pem'])
+                remote.run(
+                    args=['cp', 'ca.pem', '/etc/pki/tls/'])
+                ssl_port = str(port) + 's'
+                rgw_cmd.extend([
+                  '--rgw-frontends',
+                  'civetweb port={port} ssl_certificate={path}'.format(port=ssl_port, path='/etc/pki/tls/ca.pem'),
+                ])
+            else:
+                rgw_cmd.extend([
+                  '--rgw-frontends',
+                  'civetweb port={port}'.format(port=port),
+                ])
 
         if zone is not None:
             rgw_cmd.extend(['--rgw-zone', zone])
@@ -549,9 +575,12 @@ def extract_region_info(region, region_info):
 
 def assign_ports(ctx, config):
     """
-    Assign port numberst starting with port 7280.
+    Assign port numberst starting with port 7280 or 443.
     """
-    port = 7280
+    if ctx.rgw.ssl_enabled == True:
+        port = 443
+    else:
+        port = 7280
     role_endpoints = {}
     for remote, roles_for_host in ctx.cluster.remotes.iteritems():
         for role in roles_for_host:

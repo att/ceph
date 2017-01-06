@@ -1,0 +1,4 @@
+overrides:
+  rgw:
+    frontend: civetweb
+    ssl_enabled: True
