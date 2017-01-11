@@ -43,8 +43,8 @@ void RGWFormatter_Plain::flush(ostream& os)
   if (!buf)
     return;
 
-  if (len) {
-    os << buf << "\n";
+  if (len) {	// length here must be exactly what get_len calculated.
+    os << buf;	//	so; no newline here!
     os.flush();
   }
 
